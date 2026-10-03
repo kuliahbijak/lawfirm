@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verifikasi Dokumen · SIMLAWFIRM</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/config.js"></script>
+</head>
+<body>
+  <div class="verify-wrap"><div class="verify-card">
+    <div class="row mb" style="justify-content:center"><img src="assets/logo.png" alt="" width="44" height="44" style="border-radius:12px"><div><b style="font-size:18px">SIMLAWFIRM</b><div class="xs muted">Verifikasi Keaslian Dokumen Elektronik</div></div></div>
+    <div class="card" id="box"><div class="skel" style="height:140px"></div></div>
+    <div class="card mt">
+      <h3 class="h-sm">Cek kode lain</h3>
+      <form class="row mt-s" id="f"><input class="input mono" id="k" placeholder="Kode verifikasi (20 karakter)"><button class="btn primary">Cek</button></form>
+    </div>
+    <p class="xs muted" style="text-align:center;margin-top:16px">Halaman ini hanya menampilkan ringkasan dokumen tanpa data pribadi. QR + Google login + PIN merupakan tanda tangan elektronik tidak tersertifikasi (PP 71/2019).</p>
+  </div></div>
+<script>
+'use strict';
+var URL_GAS = (window.APP_CONFIG || {}).GAS_URL;
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function tgl(s) { var d = new Date(s); return isNaN(d) ? (s || '—') : d.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }); }
+var box = document.getElementById('box');
+async function cek(k) {
+  if (!k) { box.innerHTML = '<div class="empty"><b>Masukkan kode verifikasi</b>Pindai QR pada dokumen atau ketik kodenya di bawah.</div>'; return; }
+  box.innerHTML = '<div class="skel" style="height:140px"></div>';
+  try {
+    var r = await (await fetch(URL_GAS + '?action=verify&k=' + encodeURIComponent(k), { redirect: 'follow' })).json();
+    if (!r.success) { box.innerHTML = '<div class="row"><span class="badge bad" style="font-size:14px;padding:8px 14px">✕ TIDAK DITEMUKAN</span></div><p class="t2">' + esc(r.message) + '</p>'; return; }
+    var d = r.data, sah = d.status === 'SAH';
+    box.innerHTML = '<div class="row wrap"><span class="badge ' + (sah ? 'ok' : 'bad') + '" style="font-size:15px;padding:8px 16px">' + (sah ? '✓ DOKUMEN SAH' : '✕ ' + esc(d.status)) + '</span><span class="xs muted right">' + esc(d.instansi) + '</span></div>' +
+      (d.alasanTarik ? '<div class="err-box mt">Dokumen ditarik: ' + esc(d.alasanTarik) + '</div>' : '') +
+      '<h2 class="h-md mt">' + esc(d.judul) + '</h2><dl class="dl mt"><dt>Jenis</dt><dd>' + esc(d.jenis || '-') + '</dd><dt>Nomor</dt><dd class="mono">' + esc(d.nomor || '-') + '</dd><dt>Diterbitkan</dt><dd>' + tgl(d.terbit) + '</dd></dl>' +
+      '<div class="sec-t">Penanda Tangan</div>' + d.penandatangan.map(function (s) { return '<div class="soft row mb' + (d.slot === s.slot ? '" style="border-color:var(--primary)' : '') + '"><div class="grow"><b class="small">' + esc(s.nama || '-') + '</b><div class="xs muted">' + esc(s.jabatan || '') + ' • ' + esc(s.label || '') + '</div></div><div style="text-align:right"><span class="badge ' + (s.metode === 'BYPASS' ? 'warn' : 'ok') + '">' + esc(s.metode === 'GOOGLE+PIN' ? 'Google + PIN' : s.metode || 'Sistem') + '</span><div class="xs muted">' + tgl(s.waktu) + '</div></div></div>'; }).join('') +
+      (d.hashPdf ? '<div class="sec-t">Cek keutuhan PDF</div><p class="xs t2">Unggah PDF yang Anda terima — sidik jari SHA-256 dihitung di perangkat Anda (berkas tidak dikirim ke server).</p><input type="file" accept="application/pdf" id="pdf"><div id="hr" class="mt-s small"></div>' : '');
+    var f = document.getElementById('pdf');
+    if (f) f.onchange = async function () {
+      var buf = await f.files[0].arrayBuffer(), h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buf))).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+      document.getElementById('hr').innerHTML = h === d.hashPdf ? '<span class="badge ok">✓ Identik dengan dokumen asli</span>' : '<span class="badge bad">✕ Berbeda — berkas telah diubah atau bukan versi resmi</span>';
+    };
+  } catch (e) { box.innerHTML = '<div class="err-box">Tidak dapat menghubungi server verifikasi.</div>'; }
+}
+var k0 = new URLSearchParams(location.search).get('k') || '';
+document.getElementById('k').value = k0;
+document.getElementById('f').onsubmit = function (e) { e.preventDefault(); var k = document.getElementById('k').value.trim(); history.replaceState(null, '', '?k=' + encodeURIComponent(k)); cek(k); };
+cek(k0);
+</script>
+</body>
+</html>
